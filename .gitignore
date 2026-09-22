@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# PyCharm
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data — too large for git, and rebuildable from the API
+data/
+
+# Secrets
+.env
