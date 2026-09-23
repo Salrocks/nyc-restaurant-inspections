@@ -4,7 +4,8 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from transform import RAW_PATH, transform
+from transform import transform
+from extract import latest_raw_path
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ def verify(engine, tables):
 
 
 def main():
-    raw = pd.read_parquet(RAW_PATH)
+    raw = pd.read_parquet(latest_raw_path())
     dim, insp, viol, quarantine = transform(raw)
 
     tables = {

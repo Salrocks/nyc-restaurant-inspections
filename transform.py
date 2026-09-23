@@ -30,9 +30,6 @@ VALID_NYC_BOX = {"lat": (40.4, 41.0), "lon": (-74.3, -73.6)}
 GEO_COLS = ["council_district", "community_board", "census_tract",
             "bin", "bbl", "nta"]
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-RAW_PATH = PROJECT_ROOT / "data" / "raw" / "inspections.parquet"
-
 
 # --------------------------------------------------------------------------
 # Structural cleaning
@@ -428,7 +425,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
 
-    raw = pd.read_parquet(RAW_PATH)
+    from extract import latest_raw_path
+
+    raw = pd.read_parquet(latest_raw_path())
     dim, insp, viol, quar = transform(raw)
 
     print("dim_restaurant:", dim.shape)
