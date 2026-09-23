@@ -1,4 +1,7 @@
 services:
+  # -------------------------------------------------------------------
+  # Warehouse: the database the pipeline loads into
+  # -------------------------------------------------------------------
   postgres:
     image: postgres:16
     container_name: nyc_inspections_db
@@ -18,5 +21,73 @@ services:
       timeout: 5s
       retries: 5
 
+  # -------------------------------------------------------------------
+  # Airflow metadata database — separate from the warehouse on purpose,
+  # so Airflow's internal tables never mix with pipeline data
+  # -------------------------------------------------------------------
+  airflow-db:
+    image: postgres:16
+    container_name: airflow_metadata_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER} -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------------
+  # Airflow: scheduler + API server in one container (standalone).
+  # Fine for a portfolio project; production would split the components.
+  # -------------------------------------------------------------------
+  airflow:
+    build: .
+    container_name: airflow_standalone
+    restart: unless-stopped
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # Airflow itself
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__API__PORT: 8080
+      AIRFLOW__API__HOST: 0.0.0.0
+
+      # so the DAG can import extract / transform / load
+      PYTHONPATH: /opt/airflow/project
+
+      # warehouse connection, as seen from INSIDE the docker network:
+      # host is the service name, port is the container port (not 5433)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+
+      # Socrata API
+      APP_TOKEN: ${APP_TOKEN}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./extract.py:/opt/airflow/project/extract.py
+      - ./transform.py:/opt/airflow/project/transform.py
+      - ./load.py:/opt/airflow/project/load.py
+      - ./data:/opt/airflow/project/data
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: standalone
+
 volumes:
   pgdata:
+  airflow_db_data:
+  airflow_logs:
